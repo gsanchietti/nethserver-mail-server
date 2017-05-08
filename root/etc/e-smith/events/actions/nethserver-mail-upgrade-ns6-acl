@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# Copyright (C) 2017 Nethesis S.r.l.
+# http://www.nethesis.it - nethserver@nethesis.it
+#
+# This script is part of NethServer.
+#
+# NethServer is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License,
+# or any later version.
+#
+# NethServer is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with NethServer.  If not, see COPYING.
+#
+
+vmail_dir="/var/lib/nethserver/vmail/"
+domain=$(config get DomainName)
+find $vmail_dir -name dovecot-acl -type f -print0 | while IFS= read -r -d '' index;
+do
+    # skip acl files with @ char
+    grep -q "@" "$index"
+    if [ $? -eq 0 ]; then
+       continue
+    fi
+
+    grep -q -e '^user=' -e '^group=' "$index"
+    if [ $? -eq 0 ]; then
+        dir=$(dirname $index)
+        user=${dir##/var/lib/nethserver/vmail/}
+        user=$(echo $user | sed 's/\/.*//')
+        folder=$(basename $dir | tr . /)
+        folder=${folder##/}
+        echo "[NOTICE] fixing dovecot acl for shared folder '$user/$folder'"
+        sed -i -e "s/^user=\(.*\)\s/user=\1@$domain /" "$index"
+        doveadm acl recalc -u $user "$folder"
+    fi
+done
